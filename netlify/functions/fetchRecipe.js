@@ -4,10 +4,10 @@ export default async (req, context) => {
     const userPrompt = body.prompt;
 
     // 2. Get the Secret Key from Netlify's Vault
-    const apiKey = Netlify.env.get("GEMINI_API_KEY");
+    const apiKey = process.env.GEMINI_API_KEY;
 
     // 3. Call Google Gemini (Server to Server)
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
