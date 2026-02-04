@@ -1,40 +1,81 @@
-/* Secure script.js */
-const commonIngredients = [
-    "Potato (Aloo)", "Onion", "Tomato", "Paneer", "Dal (Lentils)", 
-    "Rice", "Garlic", "Ginger", "Green Chili", "Cumin (Jeera)", 
-    "Turmeric", "Garam Masala", "Yoghurt (Dahi)", "Chickpeas (Chana)", 
-    "Cauliflower", "Spinach (Palak)", "Peas (Matar)", "Chicken", "Eggs", "Atta (Flour)"
+/* Secure script.js - v2.0 Categorized */
+
+// 1. DATA CONFIGURATION
+const freshIngredients = [
+    "Potato (Aloo)", "Onion", "Tomato", "Paneer", "Green Chili",
+    "Ginger", "Garlic", "Cauliflower (Gobi)", "Spinach (Palak)", 
+    "Peas (Matar)", "Yoghurt (Dahi)", "Chicken", "Eggs", "Okra (Bhindi)", "Capsicum"
 ];
 
-let selectedIngredients = new Set();
+const pantrySpices = [
+    "Salt", "Oil/Ghee", "Turmeric (Haldi)", "Red Chili Powder", "Cumin (Jeera)", 
+    "Coriander Powder", "Garam Masala", "Mustard Seeds", "Dal (Lentils)", "Rice", "Atta (Flour)"
+];
 
-// 1. Render the Grid
-const grid = document.getElementById('pantryGrid');
+// 2. STATE MANAGEMENT
+// We pre-select the "Essentials" based on your spec
+let selectedIngredients = new Set([
+    "Onion", "Tomato", "Green Chili", // The Holy Trinity
+    "Salt", "Oil/Ghee", "Turmeric (Haldi)", "Red Chili Powder", "Cumin (Jeera)" // The Masala Dabba
+]);
 
-function renderGrid() {
-    // If the grid element doesn't exist yet (page loading), stop.
-    if (!grid) return; 
+// 3. RENDER LOGIC
+const freshGrid = document.getElementById('freshGrid');
+const spiceGrid = document.getElementById('spiceGrid');
+const spiceToggle = document.getElementById('spiceToggle');
+
+function renderGrids() {
+    if (!freshGrid || !spiceGrid) return; // Safety check
+
+    freshGrid.innerHTML = "";
+    spiceGrid.innerHTML = "";
+
+    // Render Fresh
+    freshIngredients.forEach(ing => createButton(ing, freshGrid));
     
-    grid.innerHTML = "";
-    commonIngredients.forEach(ing => createButton(ing));
+    // Render Spices
+    pantrySpices.forEach(ing => createButton(ing, spiceGrid));
+
+    // Render Custom items (User added via search)
     selectedIngredients.forEach(ing => {
-        if (!commonIngredients.includes(ing)) createButton(ing);
+        // If it's not in our known lists, add it to Fresh grid by default
+        if (!freshIngredients.includes(ing) && !pantrySpices.includes(ing)) {
+            createButton(ing, freshGrid);
+        }
     });
 }
 
-function createButton(name) {
+function createButton(name, container) {
     const btn = document.createElement('div');
     btn.className = `ingredient-btn ${selectedIngredients.has(name) ? 'selected' : ''}`;
     btn.innerText = name;
-    btn.onclick = () => toggleIngredient(name);
-    grid.appendChild(btn);
+    
+    btn.onclick = () => {
+        if (selectedIngredients.has(name)) {
+            selectedIngredients.delete(name);
+            // If user manually unchecks a spice, we should probably uncheck the "Master Toggle" visually
+            if (pantrySpices.includes(name)) spiceToggle.checked = false;
+        } else {
+            selectedIngredients.add(name);
+        }
+        renderGrids();
+    };
+    container.appendChild(btn);
 }
 
-// 2. Interaction Logic
-window.toggleIngredient = (name) => {
-    if (selectedIngredients.has(name)) selectedIngredients.delete(name);
-    else selectedIngredients.add(name);
-    renderGrid();
+// 4. SMART ACTIONS
+window.toggleStandardSpices = () => {
+    const isChecked = document.getElementById('spiceToggle').checked;
+    const standardSpices = ["Salt", "Oil/Ghee", "Turmeric (Haldi)", "Red Chili Powder", "Cumin (Jeera)"];
+
+    if (isChecked) {
+        // Add them all
+        standardSpices.forEach(s => selectedIngredients.add(s));
+    } else {
+        // Remove them all
+        standardSpices.forEach(s => selectedIngredients.delete(s));
+    }
+    renderGrids();
 }
 
 window.addCustom = () => {
@@ -43,14 +84,15 @@ window.addCustom = () => {
     if (val) {
         selectedIngredients.add(val);
         input.value = "";
-        renderGrid();
+        renderGrids();
     }
 }
 
-// 3. The Secure AI Call (Calls Netlify Backend)
+// 5. GENERATE (AI Call)
 window.generateRecipes = async () => {
-    if (selectedIngredients.size < 2) {
-        alert("Please select at least 2 ingredients!");
+    // Note: We lowered the limit to 1 because spices are usually selected now
+    if (selectedIngredients.size < 1) {
+        alert("Please select at least some ingredients!");
         return;
     }
 
@@ -72,15 +114,15 @@ window.generateRecipes = async () => {
             [{"emoji": "🍛", "name": "Recipe Name", "time": "15 mins", "instructions": "..."}]
         `;
 
-        // CALL OUR OWN SERVER (The Proxy)
         const response = await fetch("/.netlify/functions/fetchRecipe", {
             method: "POST",
             body: JSON.stringify({ prompt: promptText })
         });
 
         const data = await response.json();
-        
-        // Handle Google's response structure
+
+        if (data.error) throw new Error(data.error.message || "API Error");
+
         const text = data.candidates[0].content.parts[0].text;
         const cleanJson = text.replace(/```json/g, "").replace(/```/g, "");
         const recipes = JSON.parse(cleanJson);
@@ -104,5 +146,5 @@ window.generateRecipes = async () => {
     loader.style.display = "none";
 }
 
-// Initialize
-renderGrid();
+// Initial Render
+renderGrids();
