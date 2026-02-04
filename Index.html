@@ -56,8 +56,17 @@
         </datalist>
     </div>
 
-    <div id="pantryGrid" class="grid">
-        </div>
+    <h3 style="margin-top: 20px; color: #D35400;">🥦 Fresh / Base</h3>
+    <div id="freshGrid" class="grid"></div>
+
+    <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 30px;">
+        <h3 style="margin: 0; color: #D35400;">🧂 Spices & Pantry</h3>
+        <label style="font-size: 0.9rem; color: #666;">
+            <input type="checkbox" id="spiceToggle" checked onchange="toggleStandardSpices()"> 
+            Standard Dabba
+        </label>
+    </div>
+    <div id="spiceGrid" class="grid"></div>
 
     <button id="generateBtn" class="action-btn" onclick="generateRecipes()">Find Recipes</button>
     <div id="loader" class="loader">👨‍🍳 Chef is thinking...</div>
