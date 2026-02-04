@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sabzi Sorted 🍛</title>
+    <style>
+        /* CSS: This controls how the app looks */
+        :root { --primary: #FF9933; --bg: #FFF5E6; --text: #333; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background-color: var(--bg); color: var(--text); padding: 20px; max-width: 600px; margin: 0 auto; }
+        h1, h2 { text-align: center; color: #D35400; }
+        
+        /* The Pantry Grid */
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; margin-top: 15px; }
+        .ingredient-btn { background: white; border: 1px solid #ddd; padding: 10px; border-radius: 12px; cursor: pointer; text-align: center; font-size: 0.9rem; transition: 0.2s; }
+        .ingredient-btn.selected { background: var(--primary); color: white; border-color: #D35400; font-weight: bold; }
+        
+        /* Search Bar */
+        .search-box { display: flex; gap: 10px; margin: 20px 0; }
+        input[type="text"] { flex-grow: 1; padding: 12px; border-radius: 8px; border: 1px solid #ccc; }
+        button.add-btn { background: #333; color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; }
+
+        /* Generate Button */
+        .action-btn { background: var(--primary); color: white; border: none; width: 100%; padding: 15px; font-size: 1.2rem; border-radius: 12px; cursor: pointer; margin-top: 20px; font-weight: bold; }
+        .action-btn:disabled { background: #ccc; cursor: not-allowed; }
+        .loader { display: none; text-align: center; margin-top: 10px; }
+
+        /* Recipe Cards */
+        .recipe-card { background: white; padding: 20px; border-radius: 15px; margin-top: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-left: 5px solid var(--primary); }
+        .recipe-title { font-size: 1.3rem; margin-bottom: 5px; font-weight: bold; }
+        .meta { font-size: 0.9rem; color: #666; margin-bottom: 15px; display: block; }
+        .instructions { white-space: pre-line; line-height: 1.6; }
+        
+        /* Settings */
+        .settings { background: #fff; padding: 15px; border-radius: 12px; margin-bottom: 20px; }
+        label { margin-right: 15px; }
+    </style>
+</head>
+<body>
+
+    <h1>Sabzi Sorted 🍛</h1>
+    <p style="text-align:center; color:#666;">What's in your kitchen?</p>
+
+    <div class="settings">
+        <strong>I am a:</strong>
+        <label><input type="radio" name="skill" value="Beginner" checked> Beginner</label>
+        <label><input type="radio" name="skill" value="Expert"> Expert</label>
+    </div>
+
+    <div class="search-box">
+        <input type="text" id="customInput" placeholder="Type ingredient (e.g. Methi)" list="suggestions">
+        <button class="add-btn" onclick="addCustom()">Add</button>
+        <datalist id="suggestions">
+            <option value="Methi"><option value="Ghee"><option value="Besan">
+            <option value="Mustard Seeds"><option value="Curry Leaves">
+        </datalist>
+    </div>
+
+    <div id="pantryGrid" class="grid">
+        </div>
+
+    <button id="generateBtn" class="action-btn" onclick="generateRecipes()">Find Recipes</button>
+    <div id="loader" class="loader">👨‍🍳 Chef is thinking...</div>
+    <div id="results"></div>
+
+    <script type="module">
+        /* CONFIGURATION */
+        // ⚠️ SECURITY WARNING: Never put real API keys in client-side code for a public app. 
+        // For this learning MVP, it is acceptable. For the real store, we need a backend.
+        const API_KEY = "AIzaSyCkbHMvbg13Tydq8lLEf5kMBvDnuFrjdCI"; 
+        
+        /* DATA: Top 20 Common Ingredients */
+        const commonIngredients = [
+            "Potato (Aloo)", "Onion", "Tomato", "Paneer", "Dal (Lentils)", 
+            "Rice", "Garlic", "Ginger", "Green Chili", "Cumin (Jeera)", 
+            "Turmeric", "Garam Masala", "Yoghurt (Dahi)", "Chickpeas (Chana)", 
+            "Cauliflower", "Spinach (Palak)", "Peas (Matar)", "Chicken", "Eggs", "Atta (Flour)"
+        ];
+
+        let selectedIngredients = new Set();
+
+        // 1. Render the Grid
+        const grid = document.getElementById('pantryGrid');
+        
+        function renderGrid() {
+            grid.innerHTML = "";
+            // Render common items
+            commonIngredients.forEach(ing => {
+                createButton(ing);
+            });
+            // Render custom added items
+            selectedIngredients.forEach(ing => {
+                if (!commonIngredients.includes(ing)) {
+                    createButton(ing);
+                }
+            });
+        }
+
+        function createButton(name) {
+            const btn = document.createElement('div');
+            btn.className = `ingredient-btn ${selectedIngredients.has(name) ? 'selected' : ''}`;
+            btn.innerText = name;
+            btn.onclick = () => toggleIngredient(name);
+            grid.appendChild(btn);
+        }
+
+        // 2. Handle Interactions
+        window.toggleIngredient = (name) => {
+            if (selectedIngredients.has(name)) {
+                selectedIngredients.delete(name);
+            } else {
+                selectedIngredients.add(name);
+            }
+            renderGrid();
+        }
+
+        window.addCustom = () => {
+            const input = document.getElementById('customInput');
+            const val = input.value.trim();
+            if (val) {
+                selectedIngredients.add(val);
+                input.value = "";
+                renderGrid();
+            }
+        }
+
+        // 3. The Brain (Gemini API Call)
+        import { GoogleGenerativeAI } from "https://esm.run/@google/generative-ai";
+
+        window.generateRecipes = async () => {
+            if (selectedIngredients.size < 2) {
+                alert("Please select at least 2 ingredients!");
+                return;
+            }
+
+            const btn = document.getElementById('generateBtn');
+            const loader = document.getElementById('loader');
+            const results = document.getElementById('results');
+            const skill = document.querySelector('input[name="skill"]:checked').value;
+
+            // UI State: Loading
+            btn.disabled = true;
+            loader.style.display = "block";
+            results.innerHTML = "";
+
+            try {
+                const genAI = new GoogleGenerativeAI(API_KEY);
+                const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview"});
+
+                const prompt = `
+                    Act as an Indian Chef. User has these ingredients: ${Array.from(selectedIngredients).join(", ")}.
+                    User skill level: ${skill}.
+                    Goal: Suggest 3 distinct Indian recipes that can be made in <20 mins.
+                    
+                    Strictly follow this JSON structure (return ONLY raw JSON, no markdown code blocks):
+                    [
+                        {
+                            "emoji": "🍛",
+                            "name": "Recipe Name",
+                            "time": "15 mins",
+                            "instructions": "Step-by-step instructions adapted for a ${skill}."
+                        }
+                    ]
+                `;
+
+                const result = await model.generateContent(prompt);
+                const response = await result.response;
+                const text = response.text();
+                
+                // Clean up markdown if the AI adds it (common issue)
+                const cleanJson = text.replace(/```json/g, "").replace(/```/g, "");
+                const recipes = JSON.parse(cleanJson);
+
+                // Render Cards
+                recipes.forEach(recipe => {
+                    results.innerHTML += `
+                        <div class="recipe-card">
+                            <div class="recipe-title">${recipe.emoji} ${recipe.name}</div>
+                            <span class="meta">⏱️ ${recipe.time} • Skill: ${skill}</span>
+                            <div class="instructions">${recipe.instructions.replace(/\n/g, "<br>")}</div>
+                        </div>
+                    `;
+                });
+
+            } catch (error) {
+                console.error(error);
+                results.innerHTML = `<div style="color:red; text-align:center; margin-top:20px;">Error: ${error.message}. <br>Did you paste your API key correctly?</div>`;
+            }
+
+            // UI State: Done
+            btn.disabled = false;
+            loader.style.display = "none";
+        }
+        
+        // Initial Render
+        renderGrid();
+    </script>
+</body>
+</html>
